@@ -25,7 +25,13 @@ h1{margin:0;font-size:2rem;font-weight:800}
 .bar{display:flex;align-items:center;gap:12px;padding:12px 16px}
 .back{background:var(--c2);color:var(--dark);font-weight:800;font-size:1.1rem;border-radius:999px;padding:8px 20px}
 .bar span{font-weight:800;font-size:1.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-iframe{flex:1;width:100%;border:0;background:#000;min-height:0}
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+#yt{position:absolute;top:0;left:0;width:240px;height:240px;border:0}
+.cover{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--dark);text-align:center;padding:16px}
+.cover .big{font-size:min(30vw,9rem);line-height:1}
+.cover .bigname{font-weight:800;font-size:1.6rem}
+.ctl{display:flex;gap:18px;margin-top:14px}
+.ctl button{background:var(--dark);color:var(--ink);width:76px;height:76px;border-radius:50%;font-size:2rem}
 dialog{border:0;border-radius:24px;background:var(--panel);color:var(--ink);padding:22px;width:min(92vw,460px);max-height:90vh;overflow:auto;font-family:inherit}
 dialog::backdrop{background:rgba(0,0,0,.6)}
 h2{margin:0 0 12px;font-size:1.4rem}
@@ -50,7 +56,9 @@ input{width:100%;font:inherit;font-size:1rem;padding:10px 12px;border-radius:12p
 
 <section id="player" aria-label="Player">
   <div class="bar"><button class="back" id="backBtn">‹ Back</button><span id="ptitle"></span></div>
-  <iframe id="frame" title="Playlist player" sandbox="allow-scripts allow-same-origin allow-presentation" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+  <div class="stage"><div id="yt"></div>
+    <div class="cover" id="cover"><div class="big" id="bigE"></div><div class="bigname" id="bigN"></div>
+      <div class="ctl"><button id="prev" aria-label="Previous">⏮</button><button id="pp" aria-label="Play or pause">⏸</button><button id="next" aria-label="Next">⏭</button></div></div></div>
 </section>
 
 <dialog id="dlg"><div id="dlgBody"></div></dialog>
@@ -87,17 +95,37 @@ input{width:100%;font:inherit;font-size:1rem;padding:10px 12px;border-radius:12p
     });
   }
 
+  var yt=null,apiLoading=false;
+  function loadApi(cb){
+    if(window.YT&&YT.Player){cb();return}
+    window.onYouTubeIframeAPIReady=cb;
+    if(!apiLoading){apiLoading=true;var sc=document.createElement("script");sc.src="https://www.youtube.com/iframe_api";document.head.appendChild(sc)}
+  }
   function play(p){
+    var i=Math.max(0,memory.playlists.indexOf(p));
     $("ptitle").textContent=p.name;
-    $("frame").src="https://www.youtube-nocookie.com/embed/videoseries?list="+encodeURIComponent(p.id)+"&autoplay=1&rel=0&playsinline=1&iv_load_policy=3";
+    $("bigE").textContent=EMOJI[i%EMOJI.length];
+    $("bigN").textContent=p.name;
+    $("cover").style.background="var("+COLORS[i%COLORS.length]+")";
     $("home").style.display="none";
     $("player").classList.add("on");
+    loadApi(function(){
+      if(yt){yt.loadPlaylist({list:p.id,listType:"playlist",index:0});return}
+      yt=new YT.Player("yt",{width:240,height:240,
+        playerVars:{listType:"playlist",list:p.id,autoplay:1,controls:0,rel:0,playsinline:1,fs:0,disablekb:1,iv_load_policy:3},
+        events:{onReady:function(e){e.target.playVideo()},
+          onStateChange:function(e){$("pp").textContent=(e.data===1)?"⏸":"▶"},
+          onError:function(){yt.nextVideo()}}});
+    });
   }
   function stop(){
-    $("frame").src="about:blank";
+    try{if(yt)yt.stopVideo()}catch(e){}
     $("player").classList.remove("on");
     $("home").style.display="";
   }
+  $("prev").onclick=function(){try{yt.previousVideo()}catch(e){}};
+  $("next").onclick=function(){try{yt.nextVideo()}catch(e){}};
+  $("pp").onclick=function(){try{yt.getPlayerState()===1?yt.pauseVideo():yt.playVideo()}catch(e){}};
   $("backBtn").onclick=stop;
 
   var dlg=$("dlg"),body=$("dlgBody");
